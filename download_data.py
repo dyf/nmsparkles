@@ -65,3 +65,4 @@ def main():
 
     download_data(boc, stim, session, metric, threshold, out_file, template_file)
 
+if __name__ == "__main__": main()

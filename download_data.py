@@ -28,33 +28,40 @@ def compute_mean_response(boc, cell_id, stim, session):
         arr[r_i] = dff[fmin:fmin+minlen]    
     return arr.mean(axis=0)
 
-stim = si.NATURAL_MOVIE_THREE
-session = si.THREE_SESSION_A
-metric = 'reliability_nm3'
-threshold = .5
-out_file = 'sparkles_nm3_2d.npz'
-template_file  = 'nm3.npz'
-manifest_file = '/data/dynamic-brain-workshop/brain_observatory_cache/brain_observatory_manifest.json'
+def download_data(boc, stim, session, metric, threshold, out_file, template_file):
+    exps = boc.get_ophys_experiments(stimuli=[stim])
+    cells = pd.DataFrame.from_records(boc.get_cell_specimens())
+    nm_cells = cells[cells[metric] > thresold]
 
-boc = BrainObservatoryCache(manifest_file=manifest_file)
-exps = boc.get_ophys_experiments(stimuli=[stim])
-cells = pd.DataFrame.from_records(boc.get_cell_specimens())
-nm_cells = cells[cells[metric] > thresold]
+    arrs = []
+    for i,cell_id in enumerate(nm_cells.cell_specimen_id):
+        tstart = time.time()
+        mr = compute_mean_response(boc, cell_id, stim, session)
+        print("computed %d/%d (%f)" % (i+1,len(nm_cells), time.time()-tstart))
+        arrs.append(mr)
 
-arrs = []
-for i,cell_id in enumerate(nm_cells.cell_specimen_id):
-    tstart = time.time()
-    mr = compute_mean_response(boc, cell_id, stim, session)
-    print("computed %d/%d (%f)" % (i+1,len(nm_cells), time.time()-tstart))
-    arrs.append(mr)
+    minlen = min(arr.shape[0] for arr in arrs)
+    big_arr = np.vstack([ arr[:minlen] for arr in arrs])
 
-minlen = min(arr.shape[0] for arr in arrs)
-big_arr = np.vstack([ arr[:minlen] for arr in arrs])
+    mds = manifold.TSNE(n_components=2)
+    pos = mds.fit_transform(big_arr)
 
-mds = manifold.TSNE(n_components=2)
-pos = mds.fit_transform(big_arr)
+    np.savez_compressed(out_file, pos=pos, arr=big_arr)
 
-np.savez_compressed(out_file, pos=pos, arr=big_arr)
+    nm_t = boc.get_ophys_experiment_data(exps[0]['id']).get_stimulus_template(stim)
+    np.savez_compressed(template_file, template=nm1_t)
 
-nm_t = boc.get_ophys_experiment_data(exps[0]['id']).get_stimulus_template(stim)
-np.savez_compressed(template_file, template=nm1_t)
+
+def main():
+    manifest_file = '/data/dynamic-brain-workshop/brain_observatory_cache/brain_observatory_manifest.json'
+    boc = BrainObservatoryCache(manifest_file=manifest_file)
+
+    stim = si.NATURAL_MOVIE_THREE
+    session = si.THREE_SESSION_A
+    metric = 'reliability_nm3'
+    threshold = .5
+    out_file = 'sparkles_nm3_2d.npz'
+    template_file  = 'nm3.npz'
+
+    download_data(boc, stim, session, metric, threshold, out_file, template_file)
+
